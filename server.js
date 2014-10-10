@@ -40,7 +40,7 @@ _.extend(View.prototype, {
     var self = this, mappedHandlers;
 
     //regular publish
-    var handler = self._collection.find(cursor.selector, cursor.options).observeChanges({
+    var handler = self._collection.find(cursor._cursorDescription.selector, cursor._cursorDescription.options).observeChanges({
       added: function(id, fields){
         sub.added(publishName, id, fields);
         //add mapped fields
@@ -69,23 +69,25 @@ _.extend(View.prototype, {
    * Publish the mapping
    * @private
    */
-  _doMappings: function (docId, fields, sub, publishName) {
+  _doMappings: function (docId, docFields, sub, publishName) {
     var self = this,
       mappedHandlers = [];
 
     //add the _id to fields so that mapping.find can use it as if it where the document
-    fields._id = docId;
+    docFields._id = docId;
 
     //foreach mapping, get the cursor and observe it. Add the mapped fields to the original subscription
     _.each(self._mapping, function(mapping, key){
-      var cursor = mapping.find(fields);
+      var cursor = mapping.find(docFields);
+      if (!cursor) return;
+      if (! cursor.observeChanges) console.log('cursor', cursor);
       mappedHandlers.push(cursor.observeChanges({
         added: function (relatedId, relatedFields) {
-          var value = mapObject(key, mapping.map, relatedId, relatedFields);
+          var value = mapObject(key, mapping.map, relatedId, relatedFields, docFields);
           sub.changed(publishName, docId, value);
         },
         changed: function (relatedId, relatedFields) {
-          var value = mapObject(key, mapping.map, relatedId, relatedFields);
+          var value = mapObject(key, mapping.map, relatedId, relatedFields, docFields);
           sub.changed(publishName, docId, value)
         },
         removed: function (relatedId) {
@@ -101,10 +103,10 @@ _.extend(View.prototype, {
   }
 });
 
-var mapObject = function(key, map, relatedId, relatedFields){
+var mapObject = function(key, map, relatedId, relatedFields, doc){
   relatedFields._id = relatedId;
   var object = {};
-  object[key] = _.isFunction(map) ? map(relatedFields) : relatedFields;
+  object[key] = _.isFunction(map) ? map(relatedFields, doc) : relatedFields;
   return object;
 };
 /**
@@ -116,22 +118,26 @@ var mapObject = function(key, map, relatedId, relatedFields){
  */
 ViewCursor = function(view, selector, options){
   var self = this;
-  self.selector = selector || {};
-  self.options = options || {};
+  self._cursorDescription = {
+    selector: selector || {},
+    options: options || {}
+  };
   self.view = view;
-  self._mongoCursor = self.view._collection.find(self.selector, self.options);
 };
 
 /*
   Add some functions to make the viewCursors work 'like' a mongo cursor. At least from the Pagination package point of view
-  todo: _mongoCursor could be outDated sometimes since the pagination package changes the options
  */
 _.extend(ViewCursor.prototype, {
   observeChanges: function (options) {
-    return this._mongoCursor.observeChanges(options);
+    var self = this;
+    var cursor = self.view._collection.find(self._cursorDescription.selector, self._cursorDescription.options);
+    return cursor.observeChanges(options);
   },
   count: function(){
-    return this._mongoCursor.count();
+    var self = this;
+    var cursor = self.view._collection.find(self._cursorDescription.selector, self._cursorDescription.options);
+    return cursor.count();
   }
 });
 
