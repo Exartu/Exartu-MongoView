@@ -38,6 +38,7 @@ _.extend(View.prototype, {
    */
   publishCursor: function(cursor, sub, publishName){
     var self = this, mappedHandlers;
+    publishName = publishName || self._name;
 
     //regular publish
     var handler = self._collection.find(cursor._cursorDescription.selector, cursor._cursorDescription.options).observeChanges({
@@ -80,7 +81,8 @@ _.extend(View.prototype, {
     _.each(self._mapping, function(mapping, key){
       var cursor = mapping.find(docFields);
       if (!cursor) return;
-      if (! cursor.observeChanges) console.log('cursor', cursor);
+      if (! cursor.observeChanges) throw new Error('find function for mapping field \'' + key + '\' returned a truthy value which is not a cursor', cursor);
+
       mappedHandlers.push(cursor.observeChanges({
         added: function (relatedId, relatedFields) {
           var value = mapObject(key, mapping.map, relatedId, relatedFields, docFields);
@@ -138,6 +140,10 @@ _.extend(ViewCursor.prototype, {
     var self = this;
     var cursor = self.view._collection.find(self._cursorDescription.selector, self._cursorDescription.options);
     return cursor.count();
+  },
+  _publishCursor: function (subscription) {
+    var self = this;
+    self.view.publishCursor(this, subscription)
   }
 });
 
