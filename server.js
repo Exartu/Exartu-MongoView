@@ -37,15 +37,16 @@ _.extend(View.prototype, {
    * publish a ViewCursor
    */
   publishCursor: function(cursor, sub, publishName){
-    var self = this, mappedHandlers;
+    var self = this, mappedHandlers = {};
     publishName = publishName || self._name;
 
     //regular publish
     var handler = self._collection.find(cursor._cursorDescription.selector, cursor._cursorDescription.options).observeChanges({
       added: function(id, fields){
+        //console.log(publishName+' added', id);
         sub.added(publishName, id, fields);
         //add mapped fields
-        mappedHandlers = self._doMappings(id, fields, sub, publishName);
+        mappedHandlers[id] = self._doMappings(id, fields, sub, publishName);
       },
       changed: function(id, fields){
         //todo: it may be necessary to do mappings here?
@@ -53,6 +54,9 @@ _.extend(View.prototype, {
       },
       removed: function (id) {
         sub.removed(publishName, id)
+        _.each(mappedHandlers[id], function(handler){
+          handler.stop();
+        })
       }
     });
 
@@ -60,7 +64,9 @@ _.extend(View.prototype, {
     sub.onStop(function(){
       handler.stop();
       _.each(mappedHandlers, function(handler){
-        handler.stop();
+        _.each(handler, function (h) {
+          h.stop();
+        });
       })
     });
     sub.ready();
@@ -77,29 +83,20 @@ _.extend(View.prototype, {
     //add the _id to fields so that mapping.find can use it as if it where the document
     docFields._id = docId;
 
-    //foreach mapping, get the cursor and observe it. Add the mapped fields to the original subscription
-    _.each(self._mapping, function(mapping, key){
-      var cursor = mapping.find(docFields);
+    var publishMapCursor = function (cursor, name) {
+      if (! cursor._publishCursor) throw new Error('returned a truthy value which is not a cursor', cursor);
+      cursor._publishCursor(sub, name)
+    }
+
+    var options = self._mapping(docFields);
+    if (!options) return;
+
+    options = _.isArray(options) ? options : [options];
+    _.each(options, function(o){
+      var cursor = o && o.cursor ? o.cursor : o;
       if (!cursor) return;
-      if (! cursor.observeChanges) throw new Error('find function for mapping field \'' + key + '\' returned a truthy value which is not a cursor', cursor);
-
-      mappedHandlers.push(cursor.observeChanges({
-        added: function (relatedId, relatedFields) {
-          var value = mapObject(key, mapping.map, relatedId, relatedFields, docFields);
-          sub.changed(publishName, docId, value);
-        },
-        changed: function (relatedId, relatedFields) {
-          var value = mapObject(key, mapping.map, relatedId, relatedFields, docFields);
-          sub.changed(publishName, docId, value)
-        },
-        removed: function (relatedId) {
-          var object = {};
-          object[key] = mapping.map ? mapping.map(null) : null;
-          sub.changed(publishName, docId, object);
-        }
-      }));
-
-    });
+      publishMapCursor(cursor, o.name || cursor._cursorDescription.collectionName);
+    })
 
     return mappedHandlers;
   }
