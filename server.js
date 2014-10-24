@@ -107,27 +107,18 @@ _.extend(View.prototype, {
 
     //todo: actually this sub isn't ready until doMappings has finished
     sub.ready();
+
+    return handler;
   },
 
-  _publishMapCursor: function (sub, cursor, name) {
+  _publishMapCursor: function (cursor, sub, name) {
     if (! cursor._publishCursor) throw new Error(name + ' returned a truthy value which is not a cursor');
-    return cursor._publishCursor(sub, name) || {stop: function(){ console.warn('no handler for cursor published to ' + name); }};
 
-    //var observeHandle = cursor.observeChanges({
-    //  added: function (id, fields) {
-    //    sub.added(name, id, fields);
-    //  },
-    //  changed: function (id, fields) {
-    //    sub.changed(name, id, fields);
-    //  },
-    //  removed: function (id) {
-    //    sub.removed(name, id);
-    //  }
-    //});
-    //
-    //// register stop callback (expects lambda w/ no args).
-    //sub.onStop(function () {observeHandle.stop();});
-    //return observeHandle;
+    if (cursor instanceof ViewCursor){
+      return cursor._publishCursor(sub, name) || {stop: function(){ console.warn('no handler for cursor published to ' + name); }};
+    }else{
+      return PublishMongoCursor(cursor, sub, name) || {stop: function(){ console.warn('no handler for cursor published to ' + name); }};
+    }
   },
 
   /**
@@ -175,7 +166,7 @@ _.extend(View.prototype, {
 
       if (!cursor) return;
 
-      opt.handler = self._publishMapCursor(sub, cursor, opt.to);
+      opt.handler = self._publishMapCursor(cursor, sub, opt.to);
       mappings.push(opt);
     });
 
@@ -196,7 +187,7 @@ _.extend(View.prototype, {
         opt.handler.stop();
 
         if (opt.cursor){
-          opt.handler = self._publishMapCursor(sub, opt.cursor, opt.to);
+          opt.handler = self._publishMapCursor(opt.cursor, sub, opt.to);
         }
       }
     })
@@ -245,9 +236,27 @@ _.extend(ViewCursor.prototype, {
   },
   _publishCursor: function (subscription) {
     var self = this;
-    self.view.publishCursor(this, subscription)
+    return self.view.publishCursor(this, subscription)
   }
 });
+
+// equivalent to Mongo._publishCursor but it returns the handler;
+PublishMongoCursor = function (cursor, sub, collection) {
+  var observeHandle = cursor.observeChanges({
+    added: function (id, fields) {
+      sub.added(collection, id, fields);
+    },
+    changed: function (id, fields) {
+      sub.changed(collection, id, fields);
+    },
+    removed: function (id) {
+      sub.removed(collection, id);
+    }
+  });
+  sub.onStop(function () {observeHandle.stop();});
+
+  return observeHandle;
+};
 
 
 
