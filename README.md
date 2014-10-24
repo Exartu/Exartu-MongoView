@@ -1,8 +1,7 @@
 Exartu-MongoView
 =================
 
-This EXPERIMENTAL package is an attempt to build a view (like SQL's, but on top of mongo) to be publish down to the client.
-The idea is to add properties with info from another collection to the object of this publication (from now on 'mapping')
+A meteor package to publish docs with it's dependencies to the client.
 
 #Usage
 
@@ -10,35 +9,40 @@ The idea is to add properties with info from another collection to the object of
 ```js
 
 Jobs = new Meteor.Collection('jobs');
-Customers = new Meteor.Collection('customer');
+Customers = new Meteor.Collection('customers');
 
 
 if (Meteor.isServer){
     JobView = new Meteor.Collection('JobView', {
         collection: Jobs,
-        mapping: {
-            customerInfo: {
-              find: function(job) {
-                return Customers.find(job.customerId,{
-                    fields: {
-                        'organization.organizationName': 1
-                    }
-                });
+        cursors: function(doc){
+           return Customers.find(doc.customer);   //OR
+
+           return [Customers.find(doc.customer),...]; //OR
+
+           return {
+             cursor: Customers.find(doc.customer),
+             to: 'customers' //the result or the cursor will be published to the client collection with this name
+           }
+
+           //OR don't return anything and add cursors like this:
+           this.publish({
+              cursor: function (doc) {
+                if (doc.relatedID) {
+                  return Customers.find(doc.customer, { fields: { name: 1 } });
+                }
               },
-              map: function (doc) {
-                if (! doc) return null;
+              to: 'customers',
+              observedProperties: ['customer'],
+              onChange: function (changedProps, oldSelector) {
+                  oldSelector._id = changedProps.customer;
+                  return Contactables.find(oldSelector, {fields: {'name': 1}});
+                }
+            });
+         }
+   });
 
-                return {
-                  id: doc._id,
-                  displayName: doc.organization.organizationName
-                };
-              }
-            }
-          }
-    })
-
-
-  Meteor.paginatedPublish(JobView, function () {
+  Meteor.publish('jobView', function () {
     if (!this.userId)
       return false;
   
@@ -48,12 +52,6 @@ if (Meteor.isServer){
   });
 }
 
-if (Meteor.isClient){
-  MyHandler = Meteor.paginatedSubscribe('myCollection');
-}
 
 
 ```
-# why paginatedPublish?:
-
-Right now this package only works if you use paginatedPublish, we will be working to make it an independent package
