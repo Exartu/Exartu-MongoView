@@ -69,9 +69,19 @@ _.extend(View.prototype, {
    * publish a ViewCursor
    */
   publishCursor: function(cursor, sub, publishName){
-    debugger;
     var self = this;
     publishName = publishName || self._name;
+
+    // Check if I'm the 'owner' of this sub
+    // By owner I mean that this cursor not one of the mapped ones
+    // If nobody owned this sub, then I'm the owner
+    // If somebody already owned this sub, then I'm a secondary cursor
+    // and I shouldn't decide when this sub is ready or not
+    var owner = false;
+    if (!sub._owned_){
+      owner = true;
+      sub._owned_ = true;
+    }
 
     //regular publish
     var handler = self._collection.find(cursor._cursorDescription.selector, cursor._cursorDescription.options).observeChanges({
@@ -105,8 +115,7 @@ _.extend(View.prototype, {
       })
     });
 
-    //todo: actually this sub isn't ready until doMappings has finished
-    sub.ready();
+    owner && sub.ready();
 
     return handler;
   },
@@ -171,6 +180,7 @@ _.extend(View.prototype, {
     });
 
     self._mapping[docId] = mappings;
+    //sub.ready();
   },
 
   /**
