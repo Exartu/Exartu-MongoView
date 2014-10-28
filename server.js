@@ -192,7 +192,7 @@ _.extend(View.prototype, {
 
     _.each(match(docFields, self._mapping[docId]), function(opt){
       if (opt.onChange){
-        opt.cursor = opt.onChange(docFields, opt._cursor._cursorDescription.selector);
+        opt.cursor = opt.onChange.call({object: function(){ return self._collection.findOne(docId);}}, docFields, opt._cursor._cursorDescription.selector);
 
         opt.handler.stop();
 
