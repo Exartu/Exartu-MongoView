@@ -82,7 +82,11 @@ _.extend(View.prototype, {
       owner = true;
       sub._owned_ = true;
     }
+    var isCursor = function (obj) {
+      return !!(obj && obj._publishCursor);
+    };
 
+    if (! isCursor(cursor) ) return;
     //regular publish
     var handler = self._collection.find(cursor._cursorDescription.selector, cursor._cursorDescription.options).observeChanges({
       added: function(id, fields){
