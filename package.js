@@ -6,7 +6,8 @@ Package.describe({
 });
 
 Package.onUse(function (api, where) {
-  api.use(['underscore'],'server');
+  api.versionsFrom('METEOR@0.9.2');
+  api.use('underscore', 'client');
 
   api.addFiles(['server.js'], 'server');
   api.export('View', 'server');
