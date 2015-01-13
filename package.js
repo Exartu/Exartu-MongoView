@@ -1,7 +1,7 @@
 Package.describe({
   summary: "view for mongo",
   name: 'aida:mongo-view',
-  version: "0.1.0",
+  version: "0.1.1",
   git: "https://github.com/Exartu/Exartu-MongoView.git"
 });
 
